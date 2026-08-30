@@ -1,0 +1,8 @@
+- id: iam-policy-scanner
+  name: IAM Policy Scanner
+  description: Scan IAM policy JSON files for overly permissive rules (wildcard actions, public principals, iam:* access)
+  language: golang
+  entry: iam-policy-scanner
+  args: [--format=text]
+  types: [json]
+  pass_filenames: true
