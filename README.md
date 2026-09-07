@@ -14,9 +14,9 @@ Built to validate the principle that **access control problems are cheaper to ca
 
 | | |
 |---|---|
-| **Problem** | IAM policies accumulate over time across thousands of systems. Wildcards get added under deadline pressure, `iam:*` permissions creep in, and public principals go unnoticed. Manual review across 5,000+ systems is impossible — misconfigurations slip through and become exploitable in production. |
+| **Problem** | IAM policies accumulate over time across thousands of systems. Wildcards get added under deadline pressure, `iam:*` permissions creep in, and public principals go unnoticed. Manual review at that scale is impossible — misconfigurations slip through and become exploitable in production. |
 | **Solution** | A fast, concurrent scanner — one goroutine per policy — that validates every permission assignment and blocks deployments on violations. Runs in CI/CD on every policy commit. |
-| **Impact** | **5,384 systems scanned**, **188,000+ permission combinations validated daily**. MTTR on access control issues reduced 95% — from hours of manual audit to instant automated detection. **3 critical misconfigurations** caught in the first month that were directly exploitable in production. False positive rate tuned below 5% within 30 days. |
+| **Impact** | Scans thousands of systems and hundreds of thousands of permission combinations, turning hours of manual audit into instant automated detection. Has caught critical misconfigurations that were directly exploitable in production, with a low and continuously tuned false-positive rate. |
 
 ---
 
