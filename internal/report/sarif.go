@@ -98,7 +98,7 @@ func severityToSarifLevel(s types.Severity) string {
 // uniqueRules extracts deduplicated rule definitions from all violations.
 func uniqueRules(r types.SummaryReport) []sarifRule {
 	seen := map[string]bool{}
-	var rules []sarifRule
+	rules := []sarifRule{}
 	for _, result := range r.Results {
 		for _, v := range result.Violations {
 			ruleID := ruleID(v.Rule)
@@ -130,7 +130,7 @@ func ruleID(rule string) string {
 func PrintSARIF(w io.Writer, r types.SummaryReport) error {
 	rules := uniqueRules(r)
 
-	var results []sarifResult
+	results := []sarifResult{}
 	for _, scanResult := range r.Results {
 		for _, v := range scanResult.Violations {
 			results = append(results, sarifResult{

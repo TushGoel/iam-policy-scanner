@@ -16,7 +16,7 @@ Built to validate the principle that **access control problems are cheaper to ca
 |---|---|
 | **Problem** | IAM policies accumulate over time across thousands of systems. Wildcards get added under deadline pressure, `iam:*` permissions creep in, and public principals go unnoticed. Manual review at that scale is impossible — misconfigurations slip through and become exploitable in production. |
 | **Solution** | A fast, concurrent scanner — one goroutine per policy — that validates every permission assignment and blocks deployments on violations. Runs in CI/CD on every policy commit. |
-| **Impact** | Scans thousands of systems and hundreds of thousands of permission combinations, turning hours of manual audit into instant automated detection. Has caught critical misconfigurations that were directly exploitable in production, with a low and continuously tuned false-positive rate. |
+| **Impact** | Turns manual, error-prone policy review into an automated check that runs on every commit — catching wildcard actions, public principals, and unscoped resources before they reach production. |
 
 ---
 
@@ -49,15 +49,21 @@ graph TD
 | Rule | Severity | What It Detects |
 |------|----------|----------------|
 | `wildcard-action` | 🔴 CRITICAL | `Action: "*"` — unrestricted access to all AWS services |
-| `iam-full-access` | 🔴 CRITICAL | `iam:*`, `iam:CreateUser`, `iam:AttachRolePolicy` — privilege escalation vectors |
+| `iam-full-access` | 🔴 CRITICAL | `iam:*`, `iam:CreateUser`, `iam:AttachRolePolicy`, `iam:CreateAccessKey` — privilege escalation vectors |
 | `public-principal` | 🔴 CRITICAL | `Principal: "*"` — allows unauthenticated or cross-account access |
 | `wildcard-resource` | 🟠 HIGH | `Resource: "*"` — permissions apply to all resources, not scoped ARNs |
 | `notaction-overreach` | 🟠 HIGH | `NotAction` + `Allow` — grants all actions except a small exclusion list |
-| `sensitive-no-condition` | 🟡 MEDIUM | `kms:`, `secretsmanager:`, `sts:AssumeRole` with no `Condition` block |
+| `sensitive-service-no-condition` | 🟡 MEDIUM | `kms:`, `secretsmanager:`, `sts:AssumeRole`, `lambda:InvokeFunction` with no `Condition` block |
 
 ---
 
 ## Usage
+
+```bash
+iam-policy-scanner policy.json               # human-readable summary
+iam-policy-scanner --json policies/*.json    # JSON output
+iam-policy-scanner --sarif policies/*.json   # SARIF 2.1.0, for GitHub code scanning
+```
 
 ```bash
 # Build
@@ -83,14 +89,15 @@ go build -o iam-policy-scanner ./cmd/scanner/
   Policies scanned:  2
   Compliant:         1
   Violations found:  2
-  ⛔ CRITICAL:        2
+  ⛔ CRITICAL:        1
+  ⚠️  HIGH:           1
 
   ✅ compliant-example — no violations
 
   ❌ overpermissive-example
      [CRITICAL] [AdminAccess] wildcard-action
        Action "*" grants unrestricted access to all AWS services
-     [CRITICAL] [AdminAccess] wildcard-resource
+     [HIGH] [AdminAccess] wildcard-resource
        Resource "*" applies permissions to all resources — scope to specific ARNs
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -137,9 +144,13 @@ iam-policy-scanner/
 │   ├── policy/
 │   │   ├── rules.go         # Compliance rules — each rule is a pure function
 │   │   ├── validator.go     # Concurrent scanner — goroutine per policy
-│   │   └── validator_test.go # Table-driven tests — 8 test cases
+│   │   ├── validator_test.go # Table-driven tests — 8 test cases
+│   │   ├── cache.go         # Scan result cache, keyed by file hash (not yet wired into the CLI)
+│   │   └── cache_test.go    # 5 tests
 │   └── report/
-│       └── reporter.go      # Human-readable and JSON output formatters
+│       ├── reporter.go      # Human-readable and JSON output formatters
+│       ├── sarif.go         # SARIF 2.1.0 output for GitHub code scanning
+│       └── sarif_test.go    # 5 tests
 ├── pkg/types/
 │   └── policy.go            # Shared types: Policy, Statement, Violation, SummaryReport
 ├── testdata/
@@ -153,7 +164,7 @@ iam-policy-scanner/
 ## Design Decisions
 
 **Why Go:**
-IAM scanning runs on every policy commit in a high-throughput CI pipeline. Go's goroutine-per-policy model and sub-millisecond startup time make it the right tool — scanning 1,000 policies takes under 100ms vs several seconds for Python.
+IAM scanning runs on every policy commit in CI. Go's goroutine-per-policy model and fast startup time make it a good fit for that: no interpreter warm-up cost, and each policy file scans concurrently rather than one at a time.
 
 **Why rule functions, not regex:**
 Each rule is a pure function `(Statement) → (bool, string)`. Rules are composable, independently testable, and easy to extend without modifying the scanner core.
